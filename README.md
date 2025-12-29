@@ -1,353 +1,201 @@
-# 🚀 Server Setup Scripts
+# Server Setup Scripts
 
-**One-command server setup for Laravel applications with enterprise-grade features.**
+One-command server setup for Laravel applications and monitoring infrastructure.
 
-> 🍴 **Fork Notice**: This is an enhanced fork of the original script from [sohag-pro/SingleCommand](https://github.com/sohag-pro/SingleCommand). Special thanks to the original author for the foundation!
+> **Fork of** [sohag-pro/SingleCommand](https://github.com/sohag-pro/SingleCommand) with enhanced features and monitoring capabilities.
 
-## ⚡ Quick Start
+---
 
-### Method 1: Download & Execute (Recommended)
+## Quick Start
+
+### Version 2.0 (Recommended - New Enhanced UX)
+```bash
+curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup-v2.sh -o setup-v2.sh
+chmod +x setup-v2.sh
+sudo ./setup-v2.sh
+```
+
+### Version 1.0 (Original)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh -o setup.sh
 chmod +x setup.sh
-./setup.sh
+sudo ./setup.sh
 ```
 
-### Method 2: Process Substitution
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh)
+---
+
+## What's Included
+
+### Version 2.0 Features
+- **Smart Installation**: Modular setup (choose what you need)
+- **Laravel Stack**: Nginx/Apache, PHP 8.3, MySQL/PostgreSQL, Redis, Supervisor
+- **Monitoring**: Prometheus, Grafana, Node Exporter
+- **Auto-Configuration**: Environment-aware with smart recommendations
+- **System Analysis**: Automatic resource detection and optimization
+
+### Version 1.0 Features
+- **Complete LAMP/LEMP**: Web server, PHP 7.4-8.4, Database
+- **Queue Workers**: Supervisor with multiple queue support
+- **Laravel Ready**: Scheduler, migrations, permissions
+- **Frontend Tools**: Node.js, NPM, Yarn, asset building
+
+---
+
+## Installation Options (V2.0)
+
+```
+[1] Full Laravel Stack          - Complete web application setup
+[2] Laravel Components Only     - Add to existing server
+[3] Database Only              - MySQL or PostgreSQL
+[4] Full Monitoring Stack      - Prometheus + Grafana
+[5] Metrics Collection         - Prometheus + Node Exporter
+[6] Visualization Only         - Grafana dashboards
+[7] Complete Solution          - Laravel + Monitoring (Best for Production)
+[8] Quick Production Setup     - Pre-configured defaults
 ```
 
-### Method 3: Direct Pipe (Basic - Limited Interaction)
+---
+
+## Requirements
+
+- Ubuntu 18.04+ or Debian 9+
+- Root/sudo privileges
+- 4GB+ RAM (2GB minimum)
+- 20GB+ free disk space
+
+---
+
+## What Gets Installed
+
+| Component | Purpose |
+|-----------|---------|
+| Nginx/Apache | Web Server |
+| PHP 8.3 | Laravel Runtime |
+| MySQL/PostgreSQL | Database |
+| Redis | Cache/Queue/Sessions |
+| Supervisor | Queue Workers |
+| Prometheus | Metrics (V2.0) |
+| Grafana | Dashboards (V2.0) |
+| Node Exporter | System Metrics (V2.0) |
+
+---
+
+## Quick Commands
+
+### Service Management
 ```bash
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh | bash
+# Check status
+sudo systemctl status nginx mysql redis-server supervisor
+
+# Restart services
+sudo systemctl restart nginx
+sudo supervisorctl restart projectname_*
 ```
 
-> **💡 Tip**: Method 1 is recommended as it allows you to review the script first and provides full interactive capabilities.
-
-## 🔥 What You Get
-
-- **Web Server**: Apache or Nginx (your choice)
-- **PHP**: Versions 7.4 to 8.4 with all Laravel extensions
-- **Database**: MySQL or PostgreSQL (your choice)
-- **Queue Management**: Advanced Supervisor configuration with multiple queues
-- **Queue Drivers**: Database, Redis, or hybrid setup
-- **Cache & Sessions**: File, Database, or Redis drivers
-- **Process Manager**: PM2 for Node.js applications
-- **Package Managers**: Composer, NPM, Yarn
-- **Caching**: Redis support with intelligent driver selection
-- **SSL**: Automatic Let's Encrypt certificate
-- **Permissions**: Bulletproof Laravel permissions setup
-- **Optimization**: Production-ready Laravel caching
-- **Monitoring**: Built-in queue monitoring tools
-
-## 📋 Requirements
-
-- **OS**: Ubuntu 18.04+ or Debian 9+
-- **Access**: Root or sudo privileges
-- **Network**: Active internet connection
-- **Domain**: Optional (for SSL setup)
-
-## 🎯 Perfect For
-
-- ✅ Laravel production deployments
-- ✅ Development environment setup
-- ✅ VPS quick configuration
-- ✅ CI/CD pipeline integration
-- ✅ Multiple project hosting
-
-## 🛠️ Installation Options
-
-### Option 1: Download & Execute (Recommended)
+### Laravel Operations
 ```bash
-# Download and review the script
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh -o setup.sh
-
-# Review the script (optional but recommended)
-cat setup.sh
-
-# Make executable and run
-chmod +x setup.sh
-./setup.sh
-```
-
-### Option 2: Process Substitution
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh)
-```
-
-### Option 3: Direct Pipe (Limited Features)
-```bash
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh | bash
-```
-
-### Option 4: Wget Alternative
-```bash
-wget -qO setup.sh https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh
-chmod +x setup.sh
-./setup.sh
-```
-
-> **⚠️ Note**: Methods 3 may have limited interactive capabilities due to stdin redirection. Use Method 1 or 2 for full functionality.
-
-## 🎮 Interactive Setup
-
-The script will guide you through:
-
-1. **Web Server Selection** (Apache/Nginx)
-2. **PHP Version** (7.4 to 8.4)
-3. **Database Selection** (MySQL/PostgreSQL)
-4. **Database Configuration** (Username, Password, Database)
-5. **Node.js Installation** (Optional)
-6. **Repository Cloning** (Your GitHub repo)
-7. **Advanced Queue Setup**:
-   - Queue driver selection (Database/Redis/Hybrid)
-   - Cache driver (File/Database/Redis)
-   - Session driver (File/Database/Redis)
-   - Multiple queue configuration
-   - Process count optimization based on server specs
-   - Priority and timeout settings
-8. **SSL Certificate** (Let's Encrypt)
-
-## 📦 Installed Components
-
-| Component | Purpose | Version |
-|-----------|---------|---------|
-| Apache/Nginx | Web Server | Latest |
-| PHP | Backend Language | 7.4-8.4 |
-| MySQL/PostgreSQL | Database | Latest |
-| Composer | PHP Dependencies | Latest |
-| Node.js | JavaScript Runtime | 16/18/20 |
-| Supervisor | Process Manager | Latest |
-| Redis | Caching/Sessions | Latest |
-| Git | Version Control | Latest |
-
-## 🔧 Post-Installation
-
-After installation, your server will have:
-
-```bash
-# Check services status
-sudo systemctl status apache2     # or nginx
-sudo systemctl status mysql       # or postgresql
-sudo systemctl status supervisor
-sudo systemctl status redis       # if installed
-
-# Database connections
-mysql -u username -p database_name           # For MySQL
-psql -U username -d database_name           # For PostgreSQL
-
-# Advanced Queue Management
-queue-monitor                                # Check all queue status
-sudo supervisorctl status                    # All supervisor processes
-sudo supervisorctl restart projectname_*    # Restart all project queues
-sudo supervisorctl start projectname_default:*  # Start specific queue
-
-# Queue Monitoring
-tail -f /var/www/html/project/storage/logs/queue_default.log
-tail -f /var/www/html/project/storage/logs/queue_emails.log
-
-# Laravel commands
 cd /var/www/html/your-project
-php artisan queue:work redis --queue=high,default  # Work specific queues
-php artisan queue:restart                          # Restart all workers
-php artisan migrate                                 # Run migrations
+
+# Run migrations
+php artisan migrate
+
+# Cache for production
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Queue operations
+php artisan queue:work
+php artisan queue:restart
 ```
 
-## 🏗️ Directory Structure
-
-```
-/var/www/html/your-project/
-├── app/
-├── config/
-├── public/              # Document root
-├── storage/
-│   ├── logs/
-│   │   ├── laravel.log
-│   │   └── queue.log    # Supervisor queue logs
-├── .env                 # Environment configuration
-└── artisan
-```
-
-## 🔒 Security Features
-
-- ✅ Proper file permissions (755/644)
-- ✅ Storage directory protection
-- ✅ Database user isolation
-- ✅ SSL certificate automation
-- ✅ Firewall-ready configuration
-- ✅ Log file protection
-
-## 🚨 Troubleshooting
-
-### Installation Issues
-
-#### "Invalid selection" Error When Using Pipe
+### Monitoring (V2.0)
 ```bash
-# This may not work properly:
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh | bash
-
-# Use this instead:
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh -o setup.sh
-chmod +x setup.sh
-./setup.sh
-
-# Or use process substitution:
-bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh)
+# Access URLs
+http://your-ip:9090    # Prometheus
+http://your-ip:3000    # Grafana (admin/admin)
+http://your-ip:9100    # Node Exporter metrics
 ```
 
-#### Composer Issues
-```bash
-# GitHub token authentication required
-# The script will prompt for this, or you can set it manually:
-composer config --global github-oauth.github.com YOUR_TOKEN
+---
 
-# Network timeouts during package download
-# The script has multiple fallback strategies built-in
-
-# Cache permission issues
-sudo chown -R www-data:www-data /var/www/.cache
-sudo chown -R www-data:www-data /var/www/.config
-
-# Manual composer install if automated fails
-cd /var/www/html/your-project
-sudo -u www-data composer install --prefer-dist
-```
-
-#### Script Download Issues
-```bash
-# If download fails, try with wget:
-wget --no-check-certificate -qO setup.sh https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh
-
-# Or force TLS 1.2:
-curl --tlsv1.2 -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh -o setup.sh
-```
+## Troubleshooting
 
 ### Permission Issues
 ```bash
-# Fix Laravel permissions
 sudo chown -R www-data:www-data /var/www/html/your-project
 sudo chmod -R 755 /var/www/html/your-project
 sudo chmod -R 775 /var/www/html/your-project/storage
 sudo chmod -R 775 /var/www/html/your-project/bootstrap/cache
 ```
-# Build failures  
-sudo -u www-data npm run build --verbose
-sudo -u www-data npm run dev    # Try development build first
 
-# Check build output
-ls -la public/build/            # Vite builds
-ls -la public/js/ public/css/   # Webpack builds
-
-# Watch mode not working
-pkill -f "npm run watch"        # Kill existing watchers
-sudo -u www-data npm run watch  # Restart watch mode
-
-# Cache issues (ENOTEMPTY errors)
-sudo rm -rf /var/www/.npm
-sudo rm -rf node_modules
-sudo -u www-data npm install --no-cache
-```
-
-### Queue Issues
+### Queue Workers Not Running
 ```bash
-# Check queue status
-queue-monitor
-
-# Check specific queue logs
+sudo supervisorctl status
+sudo supervisorctl restart projectname_*
 tail -f /var/www/html/your-project/storage/logs/queue_default.log
-
-# Restart specific queue workers
-sudo supervisorctl restart your-project_default:*
-
-# Check Redis queue length (if using Redis)
-redis-cli llen queues:default
-redis-cli llen queues:emails
 ```
 
-### Scheduler Issues
+### Database Connection Failed
 ```bash
-sudo -u www-data crontab -l | grep schedule:run
+# Check .env file
+cat /var/www/html/your-project/.env | grep DB_
 
-# Test scheduler manually
-cd /var/www/html/your-project
-php artisan schedule:list
-php artisan schedule:run
-
-# Add scheduler manually if needed
-sudo -u www-data crontab -e
-# Add: * * * * * cd /var/www/html/your-project && php artisan schedule:run >> /dev/null 2>&1
-
-# Check scheduler logs
-tail -f storage/logs/laravel.log
-```
-# Check scheduler logs
-tail -f storage/logs/laravel.log
-
-### Driver Issues
-```bash
-# Test Redis connection
-redis-cli ping
-
-# Check Laravel can connect to queue
-cd /var/www/html/your-project
-php artisan queue:work --once
-
-# Test database connection
-php artisan migrate:status
+# Test connection
+php artisan tinker
+>>> DB::connection()->getPdo();
 ```
 
-### Web Server Issues
+### Web Server Not Responding
 ```bash
 # Apache
-sudo systemctl restart apache2
 sudo apache2ctl configtest
+sudo systemctl restart apache2
 
 # Nginx
-sudo systemctl restart nginx
 sudo nginx -t
+sudo systemctl restart nginx
 ```
-
-## 📊 Performance Optimization
-
-The script automatically configures:
-
-- **OPcache**: PHP bytecode caching
-- **Laravel Caching**: Config, route, and view caching
-- **Redis**: Session and cache storage
-- **Supervisor**: Efficient queue processing
-- **Production Settings**: Optimized for live environments
-
-## 🙏 Credits & Acknowledgments
-
-- **Original Script**: [sohag-pro/SingleCommand](https://github.com/sohag-pro/SingleCommand)
-- **Original Author**: [@sohag-pro](https://github.com/sohag-pro)
-- **Fork Enhancements**: Enhanced with Supervisor, comprehensive permissions, and Laravel optimizations
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-## 🙋‍♂️ Support
-
-- **Issues**: [GitHub Issues](https://github.com/theihasan/laravel-server-setup/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/theihasan/laravel-server-setup/discussions)
-- **Email**: [imabulhasan99@gmail.com]
-
-## ⭐ Show Your Support
-
-If this script helped you, please give it a ⭐ star on GitHub!
 
 ---
 
-**Made with ❤️ for the Laravel community**
+## Version Comparison
 
-*Deploy once, deploy anywhere!*
+| Feature | V1.0 | V2.0 |
+|---------|------|------|
+| Installation | Linear | Menu-driven |
+| Monitoring | No | Yes (Full stack) |
+| System Analysis | No | Yes (Auto) |
+| Recommendations | Manual | Smart/Auto |
+| Modular Install | No | Yes |
+
+**Use V1.0 if**: You want the traditional approach
+**Use V2.0 if**: You want monitoring and smart recommendations
+
+---
+
+## Documentation
+
+- **Quick Start**: This README
+- **V2.0 Details**: [SETUP-V2-README.md](SETUP-V2-README.md)
+- **Laravel Docs**: https://laravel.com/docs
+- **Prometheus**: https://prometheus.io/docs
+- **Grafana**: https://grafana.com/docs
+
+---
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/theihasan/laravel-server-setup/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/theihasan/laravel-server-setup/discussions)
+- **Email**: imabulhasan99@gmail.com
+
+---
+
+## License
+
+MIT License - See [LICENSE](LICENSE) file
+
+---
+
+**Made for the Laravel community**
