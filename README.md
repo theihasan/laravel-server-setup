@@ -10,13 +10,22 @@ One-command server setup for Laravel applications and monitoring infrastructure.
 
 ### Version 2.0 (Recommended - New Enhanced UX)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup-v2.sh -o setup-v2.sh
-chmod +x setup-v2.sh
-sudo ./setup-v2.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup-v2.sh)
 ```
 
 ### Version 1.0 (Original)
 ```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh)
+```
+
+**Alternative (Download and Review First)**
+```bash
+# Version 2.0
+curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup-v2.sh -o setup-v2.sh
+chmod +x setup-v2.sh
+sudo ./setup-v2.sh
+
+# Version 1.0
 curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup.sh -o setup.sh
 chmod +x setup.sh
 sudo ./setup.sh
