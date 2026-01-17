@@ -351,6 +351,11 @@ install_php_database_driver() {
         return 0
     fi
     
+    if [ -z "$PHP_VERSION" ]; then
+        log_warning "PHP version not set, skipping driver installation"
+        return 0
+    fi
+    
     log_step "Installing PHP database driver for ${DATABASE_TYPE}..."
     
     local driver_package=""
@@ -366,6 +371,8 @@ install_php_database_driver() {
             return 0
             ;;
     esac
+    
+    log_info "Package to install: ${driver_package}"
     
     # Check if already installed
     if dpkg -l | grep -q "$driver_package"; then
@@ -387,10 +394,17 @@ install_php_database_driver() {
     systemctl restart "php${PHP_VERSION}-fpm" 2>/dev/null || log_warning "Failed to restart PHP-FPM"
     
     # Verify installation
-    if php -m | grep -q "pdo_${DATABASE_TYPE}"; then
-        log_success "PHP database driver installed successfully"
+    local pdo_driver=""
+    case $DATABASE_TYPE in
+        "postgresql") pdo_driver="pdo_pgsql" ;;
+        "mysql") pdo_driver="pdo_mysql" ;;
+    esac
+    
+    if php -m | grep -qi "$pdo_driver"; then
+        log_success "PHP database driver installed successfully (${driver_package})"
+        log_info "Loaded extensions: $(php -m | grep -i pdo | tr '\n' ' ')"
     else
-        log_warning "PHP driver may not be loaded correctly. Please check manually."
+        log_warning "PHP driver may not be loaded correctly. Please verify manually with: php -m | grep pdo"
     fi
 }
 
