@@ -448,15 +448,11 @@ install_full_stack() {
     # 7. Setup Laravel project
     setup_laravel_project
     
-    # 8. Setup queue workers (if requested)
-    if [ "$INSTALL_QUEUE" = "true" ]; then
-        install_queue_workers
-    fi
+    # 8. Setup queue workers (asks user, sets INSTALL_QUEUE internally)
+    install_queue_workers
     
-    # 9. Setup cron scheduler (if requested)
-    if [ "$INSTALL_CRON" = "true" ]; then
-        setup_cron_scheduler
-    fi
+    # 9. Setup cron scheduler (asks user, sets INSTALL_CRON internally)
+    setup_cron_scheduler
     
     log_success "Full Laravel Stack installed successfully"
 }
