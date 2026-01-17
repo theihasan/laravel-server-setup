@@ -34,15 +34,18 @@ configure_and_install_database() {
             DATABASE_MODE="local"
             install_mysql_local
             configure_mysql_database
+            install_php_database_driver
             ;;
         2)
             DATABASE_TYPE="postgresql"
             DATABASE_MODE="local"
             install_postgresql_local
             configure_postgresql_database
+            install_php_database_driver
             ;;
         3)
             configure_remote_database
+            # Driver already installed in configure_remote_database
             ;;
         4)
             log_info "Skipping database setup"
@@ -56,11 +59,9 @@ configure_and_install_database() {
             DATABASE_MODE="local"
             install_mysql_local
             configure_mysql_database
+            install_php_database_driver
             ;;
     esac
-    
-    # Install the correct PHP database driver based on selected database type
-    install_php_database_driver
 }
 
 #############################################################################
@@ -237,13 +238,19 @@ configure_remote_database() {
     get_input "Database username" "" DB_USER
     get_password "Database password" DB_PASS
     
+    # Ensure PHP database driver is installed for remote connections
+    log_step "Installing PHP database driver for ${DATABASE_TYPE}..."
+    install_php_database_driver
+    
     # Test connection
     if confirm "Test database connection now?" "y"; then
         test_database_connection
     fi
     
     log_success "Remote database configuration saved"
+    log_info "Type: ${DATABASE_TYPE}"
     log_info "Database: $DB_NAME @ $DB_HOST:$DB_PORT"
+    log_info "Username: $DB_USER"
 }
 
 #############################################################################
@@ -330,15 +337,34 @@ update_laravel_env_database() {
         *) db_connection="mysql" ;;
     esac
     
-    # Update or add database configuration
-    sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=${db_connection}/" "$env_file" || echo "DB_CONNECTION=${db_connection}" >> "$env_file"
-    sed -i "s/^DB_HOST=.*/DB_HOST=${DB_HOST}/" "$env_file" || echo "DB_HOST=${DB_HOST}" >> "$env_file"
-    sed -i "s/^DB_PORT=.*/DB_PORT=${DB_PORT}/" "$env_file" || echo "DB_PORT=${DB_PORT}" >> "$env_file"
-    sed -i "s/^DB_DATABASE=.*/DB_DATABASE=${DB_NAME}/" "$env_file" || echo "DB_DATABASE=${DB_NAME}" >> "$env_file"
-    sed -i "s/^DB_USERNAME=.*/DB_USERNAME=${DB_USER}/" "$env_file" || echo "DB_USERNAME=${DB_USER}" >> "$env_file"
-    sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${DB_PASS}/" "$env_file" || echo "DB_PASSWORD=${DB_PASS}" >> "$env_file"
+    # Function to update or add env variable
+    update_env_var() {
+        local key=$1
+        local value=$2
+        local file=$3
+        
+        # Escape special characters for sed
+        local escaped_value=$(echo "$value" | sed 's/[&/\]/\\&/g')
+        
+        if grep -q "^${key}=" "$file"; then
+            # Update existing line
+            sed -i "s|^${key}=.*|${key}=${escaped_value}|" "$file"
+        else
+            # Add new line
+            echo "${key}=${value}" >> "$file"
+        fi
+    }
+    
+    # Update all database variables
+    update_env_var "DB_CONNECTION" "$db_connection" "$env_file"
+    update_env_var "DB_HOST" "$DB_HOST" "$env_file"
+    update_env_var "DB_PORT" "$DB_PORT" "$env_file"
+    update_env_var "DB_DATABASE" "$DB_NAME" "$env_file"
+    update_env_var "DB_USERNAME" "$DB_USER" "$env_file"
+    update_env_var "DB_PASSWORD" "$DB_PASS" "$env_file"
     
     log_success "Database configuration updated in .env"
+    log_info "Updated: DB_CONNECTION=$db_connection, DB_HOST=$DB_HOST, DB_DATABASE=$DB_NAME"
 }
 
 #############################################################################
