@@ -58,6 +58,9 @@ configure_and_install_database() {
             configure_mysql_database
             ;;
     esac
+    
+    # Install the correct PHP database driver based on selected database type
+    install_php_database_driver
 }
 
 #############################################################################
@@ -336,6 +339,59 @@ update_laravel_env_database() {
     sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${DB_PASS}/" "$env_file" || echo "DB_PASSWORD=${DB_PASS}" >> "$env_file"
     
     log_success "Database configuration updated in .env"
+}
+
+#############################################################################
+# PHP DATABASE DRIVER INSTALLATION
+#############################################################################
+
+install_php_database_driver() {
+    if [ "$DATABASE_TYPE" = "none" ]; then
+        log_info "No database selected, skipping PHP driver installation"
+        return 0
+    fi
+    
+    log_step "Installing PHP database driver for ${DATABASE_TYPE}..."
+    
+    local driver_package=""
+    case $DATABASE_TYPE in
+        "postgresql")
+            driver_package="php${PHP_VERSION}-pgsql"
+            ;;
+        "mysql")
+            driver_package="php${PHP_VERSION}-mysql"
+            ;;
+        *)
+            log_warning "Unknown database type: $DATABASE_TYPE"
+            return 0
+            ;;
+    esac
+    
+    # Check if already installed
+    if dpkg -l | grep -q "$driver_package"; then
+        log_info "PHP driver $driver_package is already installed"
+        return 0
+    fi
+    
+    # Install the driver
+    case $OS in
+        ubuntu|debian)
+            apt-get install -y "$driver_package" || log_warning "Failed to install $driver_package"
+            ;;
+        centos|rhel|fedora)
+            yum install -y "php${PHP_VERSION}-pdo_${DATABASE_TYPE}" || log_warning "Failed to install PHP driver"
+            ;;
+    esac
+    
+    # Restart PHP-FPM to load the new extension
+    systemctl restart "php${PHP_VERSION}-fpm" 2>/dev/null || log_warning "Failed to restart PHP-FPM"
+    
+    # Verify installation
+    if php -m | grep -q "pdo_${DATABASE_TYPE}"; then
+        log_success "PHP database driver installed successfully"
+    else
+        log_warning "PHP driver may not be loaded correctly. Please check manually."
+    fi
 }
 
 # Redis installation moved to dedicated redis.sh module
