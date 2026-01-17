@@ -314,7 +314,7 @@ update_laravel_env_database() {
     
     if [ ! -f "$env_file" ]; then
         log_warning ".env file not found: $env_file"
-        return 1
+        return 0
     fi
     
     log_step "Updating Laravel .env with database credentials..."

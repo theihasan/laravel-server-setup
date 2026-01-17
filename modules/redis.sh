@@ -414,7 +414,7 @@ create_redis_config_for_laravel() {
     
     if [ ! -d "$config_dir" ]; then
         log_warning "Laravel config directory not found"
-        return 1
+        return 0
     fi
     
     # Check if we need to update database.php

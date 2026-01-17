@@ -268,7 +268,7 @@ EOFSCRIPT
 update_laravel_env_queue() {
     if [ ! -f "$LARAVEL_PATH/.env" ]; then
         log_warning ".env file not found"
-        return 1
+        return 0
     fi
     
     log_step "Updating .env with queue configuration..."

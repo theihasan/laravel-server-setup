@@ -23,13 +23,13 @@ configure_laravel_cron() {
     log_step "Configuring Laravel cron scheduler..."
     
     if [ -z "$LARAVEL_PATH" ]; then
-        log_error "Laravel path not set"
-        return 1
+        log_warning "Laravel path not set, skipping cron scheduler"
+        return 0
     fi
     
     if [ ! -f "$LARAVEL_PATH/artisan" ]; then
-        log_error "Laravel project not found at: $LARAVEL_PATH"
-        return 1
+        log_warning "Laravel project not found at: $LARAVEL_PATH, skipping cron scheduler"
+        return 0
     fi
     
     # Create cron entry
