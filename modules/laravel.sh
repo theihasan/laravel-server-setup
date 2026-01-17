@@ -171,6 +171,44 @@ configure_composer() {
 }
 
 #############################################################################
+# NODE.JS AND NPM INSTALLATION
+#############################################################################
+
+install_nodejs_npm() {
+    log_step "Installing Node.js and NPM..."
+    
+    case $OS in
+        ubuntu|debian)
+            # Install Node.js 20.x LTS (recommended for Laravel)
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs || error_exit "Failed to install Node.js"
+            ;;
+        centos|rhel|fedora)
+            # Install Node.js 20.x LTS
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            yum install -y nodejs || error_exit "Failed to install Node.js"
+            ;;
+    esac
+    
+    # Verify installation
+    local node_version=$(node --version 2>/dev/null || echo "not installed")
+    local npm_version=$(npm --version 2>/dev/null || echo "not installed")
+    
+    if [ "$node_version" != "not installed" ] && [ "$npm_version" != "not installed" ]; then
+        log_success "Node.js ${node_version} and NPM ${npm_version} installed"
+    else
+        log_warning "Node.js/NPM installation may have failed"
+        return 1
+    fi
+    
+    # Configure npm for www-data user
+    mkdir -p /var/www/.npm
+    chown -R www-data:www-data /var/www/.npm
+    
+    log_info "Node.js and NPM ready for Laravel asset compilation"
+}
+
+#############################################################################
 # LARAVEL PROJECT SETUP
 #############################################################################
 

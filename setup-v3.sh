@@ -445,13 +445,16 @@ install_full_stack() {
     # 6. Install Composer
     install_composer_tool
     
-    # 7. Setup Laravel project
+    # 7. Install Node.js and NPM (for Laravel assets)
+    install_nodejs_npm
+    
+    # 8. Setup Laravel project
     setup_laravel_project
     
-    # 8. Setup queue workers (asks user, sets INSTALL_QUEUE internally)
+    # 9. Setup queue workers (asks user, sets INSTALL_QUEUE internally)
     install_queue_workers
     
-    # 9. Setup cron scheduler (asks user, sets INSTALL_CRON internally)
+    # 10. Setup cron scheduler (asks user, sets INSTALL_CRON internally)
     setup_cron_scheduler
     
     log_success "Full Laravel Stack installed successfully"
@@ -501,6 +504,21 @@ show_installation_summary() {
     print_box_start
     [ -n "$WEB_SERVER" ] && print_box_item "  [${GREEN}✓${NC}] Web Server: $WEB_SERVER"
     [ -n "$PHP_VERSION" ] && print_box_item "  [${GREEN}✓${NC}] PHP: $PHP_VERSION"
+    
+    # Show Composer version if installed
+    if command -v composer &> /dev/null; then
+        local composer_ver=$(composer --version 2>/dev/null | head -n1 | grep -oP '\d+\.\d+\.\d+' | head -1)
+        [ -n "$composer_ver" ] && print_box_item "  [${GREEN}✓${NC}] Composer: $composer_ver"
+    fi
+    
+    # Show Node.js and NPM if installed
+    if command -v node &> /dev/null && command -v npm &> /dev/null; then
+        local node_ver=$(node --version 2>/dev/null)
+        local npm_ver=$(npm --version 2>/dev/null)
+        print_box_item "  [${GREEN}✓${NC}] Node.js: $node_ver"
+        print_box_item "  [${GREEN}✓${NC}] NPM: $npm_ver"
+    fi
+    
     [ -n "$DATABASE_TYPE" ] && print_box_item "  [${GREEN}✓${NC}] Database: $DATABASE_TYPE ($DATABASE_MODE)"
     if systemctl is-active --quiet redis-server 2>/dev/null || systemctl is-active --quiet redis 2>/dev/null; then
         print_box_item "  [${GREEN}✓${NC}] Redis: Installed"
