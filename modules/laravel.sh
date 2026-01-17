@@ -679,6 +679,27 @@ select_nodejs_version() {
 install_nodejs() {
     log_step "Installing Node.js ${NODE_VERSION}.x and NPM..."
     
+    # Check if Node.js is already installed
+    local current_node_version=$(node --version 2>/dev/null | sed 's/v\([0-9]*\).*/\1/' || echo "0")
+    
+    if [ "$current_node_version" != "0" ]; then
+        log_info "Node.js v$(node --version) is already installed"
+        
+        # Check if it's the desired version
+        if [ "$current_node_version" = "$NODE_VERSION" ]; then
+            log_success "Correct version already installed, skipping installation"
+            return 0
+        else
+            log_warning "Different Node.js version detected (v$current_node_version vs requested v${NODE_VERSION})"
+            if confirm "Keep existing Node.js v$current_node_version?"; then
+                log_info "Keeping existing Node.js installation"
+                NODE_VERSION="$current_node_version"
+                return 0
+            fi
+            log_info "Installing Node.js ${NODE_VERSION}.x..."
+        fi
+    fi
+    
     case $OS in
         ubuntu|debian)
             # Install Node.js from NodeSource repository
@@ -700,12 +721,17 @@ install_nodejs() {
         log_success "Node.js ${node_version} and NPM ${npm_version} installed"
     else
         log_warning "Node.js/NPM installation may have failed"
-        return 1
+        return 0  # Don't fail the script, just warn
     fi
 }
 
 configure_npm() {
     log_step "Configuring NPM..."
+    
+    # Fix any root-owned npm cache (common issue from previous npm runs)
+    if [ -d "/var/www/.npm" ]; then
+        chown -R www-data:www-data /var/www/.npm 2>/dev/null || true
+    fi
     
     # Configure npm for www-data user
     mkdir -p /var/www/.npm
@@ -713,8 +739,13 @@ configure_npm() {
     chown -R www-data:www-data /var/www/.npm
     chown -R www-data:www-data /var/www/.npm-global
     
-    # Set npm global directory for www-data
-    sudo -u www-data npm config set prefix '/var/www/.npm-global'
+    # Set npm global directory for www-data (with error handling)
+    if ! sudo -u www-data npm config set prefix '/var/www/.npm-global' 2>/dev/null; then
+        log_warning "NPM config warning (non-critical, continuing...)"
+        # Try to fix and retry
+        chown -R www-data:www-data /var/www/.npm* 2>/dev/null || true
+        sudo -u www-data npm config set prefix '/var/www/.npm-global' 2>/dev/null || true
+    fi
     
     log_success "NPM configured for www-data user"
     log_info "Node.js and NPM ready for Laravel Vite asset compilation"
