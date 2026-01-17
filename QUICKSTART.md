@@ -2,14 +2,28 @@
 
 ## 🚀 5-Minute Setup
 
-### Step 1: Download
+### One-Line Installation (Fastest)
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/install-v3.sh)
+```
+
+This will automatically:
+- Download the complete setup
+- Verify all required files
+- Run the interactive installer
+- Clean up temporary files
+
+### Manual Installation (Recommended for Review)
+
+**Step 1: Download**
 
 ```bash
 git clone https://github.com/theihasan/laravel-server-setup.git
 cd laravel-server-setup
 ```
 
-### Step 2: Run
+**Step 2: Run**
 
 ```bash
 sudo ./setup-v3.sh

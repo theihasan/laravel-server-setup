@@ -57,13 +57,13 @@
 ### **One-Line Installation**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup-v3.sh | sudo bash
+bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/install-v3.sh)
 ```
 
 ### **Manual Installation**
 
 ```bash
-# Download the script
+# Clone the repository
 git clone https://github.com/theihasan/laravel-server-setup.git
 cd laravel-server-setup
 

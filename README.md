@@ -10,7 +10,7 @@ One-command server setup for Laravel applications with monitoring infrastructure
 
 ### Version 3.0 (Latest - Production Ready) ⭐
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup-v3.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/install-v3.sh)
 ```
 
 ### Version 2.0 (Enhanced UX)
@@ -26,8 +26,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-set
 **Alternative (Download and Review First)**
 ```bash
 # Version 3.0 (Recommended)
-curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/setup-v3.sh -o setup-v3.sh
-chmod +x setup-v3.sh
+curl -fsSL https://raw.githubusercontent.com/theihasan/laravel-server-setup/main/install-v3.sh -o install-v3.sh
+chmod +x install-v3.sh
+sudo ./install-v3.sh
+
+# Or clone the full repository
+git clone https://github.com/theihasan/laravel-server-setup.git
+cd laravel-server-setup
 sudo ./setup-v3.sh
 
 # Version 2.0
