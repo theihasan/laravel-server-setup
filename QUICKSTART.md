@@ -115,10 +115,11 @@ sudo ./setup-v3.sh
 ### Full Laravel Stack Includes:
 
 - ✅ Web Server (your choice)
-- ✅ PHP + Extensions
+- ✅ PHP + Extensions + FPM optimization
 - ✅ Composer
+- ✅ Node.js + NPM (with version selection)
 - ✅ Database (local or configured for remote)
-- ✅ Git + Project setup
+- ✅ Git + Deployment workflow
 - ✅ File permissions (ACL)
 - ✅ Queue workers (optional)
 - ✅ Cron scheduler (optional)
@@ -165,6 +166,34 @@ laravel-queue status
 # Monitoring
 monitoring status
 ```
+
+### Deploy Updates (NEW!)
+
+```bash
+# Navigate to your project
+cd /var/www/html/your-project
+
+# Deploy latest changes from Git
+laravel-deploy pull
+
+# Check what changed
+laravel-deploy status
+laravel-deploy log
+
+# Switch to different branch
+laravel-deploy branch staging
+
+# Rollback if something goes wrong
+laravel-deploy rollback
+```
+
+**Available Commands:**
+- `pull` - Deploy latest changes (safe)
+- `force` - Force deploy (discards local changes)
+- `status` - Check Git status
+- `branch [name]` - Switch branches
+- `log` - View commit history
+- `rollback` - Revert to previous commit
 
 ### View Your Site
 

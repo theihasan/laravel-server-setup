@@ -55,11 +55,14 @@ sudo ./setup.sh
 - **4 Web Server Options**: Nginx, Apache, Caddy (auto-HTTPS), FrankenPHP (HTTP/2/3)
 - **Full Redis Integration**: Cache, Session, Queue with PhpRedis/Predis support
 - **Remote Database Support**: Use external MySQL/PostgreSQL servers
+- **Git Deployment Workflow**: One-command deployments with laravel-deploy CLI
+- **PHP-FPM Optimization**: Resource-based worker pool configuration
+- **Node.js Integration**: Version selection (18.x/20.x/22.x) with Vite auto-detection
 - **Configuration Templates**: 8 production-ready templates (Nginx, Apache, Caddy, Supervisor)
 - **Grafana Dashboards**: Pre-built Laravel and Redis monitoring dashboards
-- **Management CLIs**: 4 command-line tools (queue, scheduler, monitoring, redis)
+- **Management CLIs**: 5 command-line tools (deploy, queue, scheduler, monitoring, redis)
 - **Comprehensive Testing**: Detailed testing checklist and verification script
-- **PHP Version Choice**: 8.1, 8.2, 8.3, 8.4
+- **PHP Version Choice**: 8.1, 8.2, 8.3, 8.4 with automatic database drivers
 - **Documentation**: 8 comprehensive guides including testing and troubleshooting
 
 ### Version 2.0 Features
@@ -144,6 +147,14 @@ sudo ./setup.sh
 
 ### V3.0 Management Tools
 ```bash
+# Git Deployment (NEW!)
+laravel-deploy pull       # Deploy latest changes
+laravel-deploy force      # Force deploy (discard local changes)
+laravel-deploy status     # Check Git status
+laravel-deploy branch     # Switch branches
+laravel-deploy log        # View commit history
+laravel-deploy rollback   # Rollback to previous commit
+
 # Queue workers
 laravel-queue status      # Check worker status
 laravel-queue restart     # Restart workers
@@ -197,6 +208,46 @@ php artisan view:cache
 php artisan queue:work
 php artisan queue:restart
 ```
+
+### Git Deployment (V3.0)
+```bash
+cd /var/www/html/your-project
+
+# Deploy latest changes
+laravel-deploy pull
+# → Pulls changes, updates dependencies, runs migrations, rebuilds assets
+
+# Force deploy (discard local changes)
+laravel-deploy force
+# → Resets to remote state, performs full deployment
+
+# Check deployment status
+laravel-deploy status
+# → Shows current branch, uncommitted changes, last commit
+
+# Switch branches
+laravel-deploy branch staging
+# → Switches to staging branch and deploys
+
+# View recent commits
+laravel-deploy log
+# → Shows last 10 commits with dates
+
+# Rollback to previous commit
+laravel-deploy rollback
+# → Reverts to previous commit and redeploys
+```
+
+**Deployment Workflow:**
+1. Enables maintenance mode
+2. Pulls/resets from Git
+3. Updates Composer dependencies
+4. Runs database migrations
+5. Clears Laravel cache
+6. Rebuilds frontend assets (if Node.js installed)
+7. Reloads PHP-FPM
+8. Restarts queue workers
+9. Disables maintenance mode
 
 ### Monitoring Access (V2.0 & V3.0)
 ```bash
