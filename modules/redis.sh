@@ -353,7 +353,7 @@ show_redis_configuration_summary() {
 update_laravel_env_redis() {
     if [ -z "$LARAVEL_PATH" ] || [ ! -f "$LARAVEL_PATH/.env" ]; then
         log_warning "Laravel .env file not found, skipping Redis configuration"
-        return 1
+        return 0
     fi
     
     log_step "Updating Laravel .env with Redis configuration..."
