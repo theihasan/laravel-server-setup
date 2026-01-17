@@ -117,13 +117,464 @@ configure_php() {
             sed -i "s/^;opcache.max_accelerated_files=.*/opcache.max_accelerated_files=20000/" "$php_ini"
         fi
         
-        # Restart PHP-FPM
-        systemctl restart "php${PHP_VERSION}-fpm"
-        
         log_success "PHP configured for Laravel"
     else
         log_warning "PHP configuration file not found"
     fi
+    
+    # Configure PHP-FPM pool
+    configure_php_fpm_pool
+}
+
+#############################################################################
+# PHP-FPM POOL CONFIGURATION
+#############################################################################
+
+configure_php_fpm_pool() {
+    if ! confirm "Configure PHP-FPM worker pool for optimal performance?"; then
+        log_info "Skipping PHP-FPM pool configuration"
+        systemctl restart "php${PHP_VERSION}-fpm"
+        return 0
+    fi
+    
+    print_section "⚙️ PHP-FPM Worker Pool Configuration"
+    
+    calculate_fpm_recommendations
+    configure_fpm_pool_settings
+}
+
+calculate_fpm_recommendations() {
+    log_step "Analyzing server resources for PHP-FPM recommendations..."
+    
+    # Get server resources
+    local total_ram_mb=$(free -m | awk 'NR==2{print $2}')
+    local available_ram_mb=$(free -m | awk 'NR==2{print $7}')
+    local cpu_cores=$(nproc)
+    
+    # Average PHP process memory (estimated)
+    local php_process_memory=64  # MB per PHP-FPM child process
+    
+    # Calculate recommendations based on server type
+    case $SERVER_TYPE in
+        "small")
+            # Small server: Conservative settings
+            PM_TYPE="dynamic"
+            PM_MAX_CHILDREN=10
+            PM_START_SERVERS=2
+            PM_MIN_SPARE_SERVERS=1
+            PM_MAX_SPARE_SERVERS=3
+            PM_MAX_REQUESTS=500
+            ;;
+        "basic")
+            # Basic server: Moderate settings
+            PM_TYPE="dynamic"
+            PM_MAX_CHILDREN=20
+            PM_START_SERVERS=4
+            PM_MIN_SPARE_SERVERS=2
+            PM_MAX_SPARE_SERVERS=6
+            PM_MAX_REQUESTS=500
+            ;;
+        "medium")
+            # Medium server: Balanced settings
+            PM_TYPE="dynamic"
+            PM_MAX_CHILDREN=50
+            PM_START_SERVERS=10
+            PM_MIN_SPARE_SERVERS=5
+            PM_MAX_SPARE_SERVERS=15
+            PM_MAX_REQUESTS=1000
+            ;;
+        "large")
+            # Large server: High-performance settings
+            PM_TYPE="dynamic"
+            PM_MAX_CHILDREN=100
+            PM_START_SERVERS=20
+            PM_MIN_SPARE_SERVERS=10
+            PM_MAX_SPARE_SERVERS=30
+            PM_MAX_REQUESTS=1000
+            ;;
+        *)
+            # Default: Basic settings
+            PM_TYPE="dynamic"
+            PM_MAX_CHILDREN=20
+            PM_START_SERVERS=4
+            PM_MIN_SPARE_SERVERS=2
+            PM_MAX_SPARE_SERVERS=6
+            PM_MAX_REQUESTS=500
+            ;;
+    esac
+    
+    # Display recommendations
+    echo ""
+    echo -e "${BOLD}Server Analysis:${NC}"
+    echo ""
+    print_box_start
+    print_box_item "  Total RAM: ${total_ram_mb} MB"
+    print_box_item "  Available RAM: ${available_ram_mb} MB"
+    print_box_item "  CPU Cores: ${cpu_cores}"
+    print_box_item "  Server Type: ${SERVER_TYPE}"
+    print_box_item "  Estimated PHP Memory: ${php_process_memory} MB per worker"
+    print_box_end
+    echo ""
+    
+    echo -e "${BOLD}Recommended PHP-FPM Settings:${NC}"
+    echo ""
+    print_box_start
+    print_box_item "  ${GREEN}Process Manager:${NC} ${PM_TYPE}"
+    print_box_item "  ${GREEN}Max Children:${NC} ${PM_MAX_CHILDREN} workers"
+    print_box_item "  ${GREEN}Start Servers:${NC} ${PM_START_SERVERS} workers"
+    print_box_item "  ${GREEN}Min Spare:${NC} ${PM_MIN_SPARE_SERVERS} workers"
+    print_box_item "  ${GREEN}Max Spare:${NC} ${PM_MAX_SPARE_SERVERS} workers"
+    print_box_item "  ${GREEN}Max Requests:${NC} ${PM_MAX_REQUESTS} per worker"
+    print_box_end
+    echo ""
+    
+    log_info "These settings are optimized for ${SERVER_TYPE} servers"
+}
+
+configure_fpm_pool_settings() {
+    echo -e "${BOLD}PHP-FPM Configuration Options:${NC}"
+    echo ""
+    
+    print_box_start
+    print_box_item "  ${GREEN}1)${NC} Use Recommended Settings"
+    print_box_item "     → Optimized for your server (${SERVER_TYPE})"
+    print_box_item ""
+    print_box_item "  ${GREEN}2)${NC} Custom Configuration"
+    print_box_item "     → Manually set worker values"
+    print_box_item ""
+    print_box_item "  ${GREEN}3)${NC} Skip Configuration"
+    print_box_item "     → Keep default PHP-FPM settings"
+    print_box_end
+    echo ""
+    
+    get_input "Select option [1-3]" "1" fpm_choice
+    
+    case $fpm_choice in
+        1)
+            log_info "Using recommended settings"
+            apply_fpm_configuration
+            ;;
+        2)
+            custom_fpm_configuration
+            apply_fpm_configuration
+            ;;
+        3)
+            log_info "Keeping default PHP-FPM configuration"
+            systemctl restart "php${PHP_VERSION}-fpm"
+            return 0
+            ;;
+        *)
+            log_warning "Invalid selection, using recommended settings"
+            apply_fpm_configuration
+            ;;
+    esac
+}
+
+custom_fpm_configuration() {
+    echo ""
+    echo -e "${BOLD}Custom PHP-FPM Configuration:${NC}"
+    echo ""
+    
+    get_input "Max children (max concurrent workers)" "$PM_MAX_CHILDREN" PM_MAX_CHILDREN
+    get_input "Start servers (workers on startup)" "$PM_START_SERVERS" PM_START_SERVERS
+    get_input "Min spare servers (idle workers minimum)" "$PM_MIN_SPARE_SERVERS" PM_MIN_SPARE_SERVERS
+    get_input "Max spare servers (idle workers maximum)" "$PM_MAX_SPARE_SERVERS" PM_MAX_SPARE_SERVERS
+    get_input "Max requests per worker (before restart)" "$PM_MAX_REQUESTS" PM_MAX_REQUESTS
+}
+
+apply_fpm_configuration() {
+    log_step "Applying PHP-FPM pool configuration..."
+    
+    local pool_config="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+    
+    if [ ! -f "$pool_config" ]; then
+        log_warning "PHP-FPM pool configuration not found at $pool_config"
+        return 1
+    fi
+    
+    # Backup original
+    cp "$pool_config" "${pool_config}.backup-$(date +%Y%m%d-%H%M%S)"
+    
+    # Update pool configuration
+    sed -i "s/^pm = .*/pm = ${PM_TYPE}/" "$pool_config"
+    sed -i "s/^pm.max_children = .*/pm.max_children = ${PM_MAX_CHILDREN}/" "$pool_config"
+    sed -i "s/^pm.start_servers = .*/pm.start_servers = ${PM_START_SERVERS}/" "$pool_config"
+    sed -i "s/^pm.min_spare_servers = .*/pm.min_spare_servers = ${PM_MIN_SPARE_SERVERS}/" "$pool_config"
+    sed -i "s/^pm.max_spare_servers = .*/pm.max_spare_servers = ${PM_MAX_SPARE_SERVERS}/" "$pool_config"
+    sed -i "s/^;pm.max_requests = .*/pm.max_requests = ${PM_MAX_REQUESTS}/" "$pool_config"
+    sed -i "s/^pm.max_requests = .*/pm.max_requests = ${PM_MAX_REQUESTS}/" "$pool_config"
+    
+    # Enable status page for monitoring
+    sed -i "s/^;pm.status_path = .*/pm.status_path = \/php-fpm-status/" "$pool_config"
+    
+    # Enable slow log
+    sed -i "s/^;slowlog = .*/slowlog = \/var\/log\/php${PHP_VERSION}-fpm-slow.log/" "$pool_config"
+    sed -i "s/^;request_slowlog_timeout = .*/request_slowlog_timeout = 10s/" "$pool_config"
+    
+    # Set process priority
+    sed -i "s/^;process.priority = .*/process.priority = -10/" "$pool_config"
+    
+    log_success "PHP-FPM pool configuration applied"
+    
+    # Restart PHP-FPM
+    log_step "Restarting PHP-FPM..."
+    systemctl restart "php${PHP_VERSION}-fpm"
+    
+    if systemctl is-active --quiet "php${PHP_VERSION}-fpm"; then
+        log_success "PHP-FPM restarted successfully"
+        show_fpm_status
+    else
+        log_error "PHP-FPM failed to restart. Check logs: journalctl -u php${PHP_VERSION}-fpm"
+        return 1
+    fi
+}
+
+show_fpm_status() {
+    echo ""
+    echo -e "${BOLD}PHP-FPM Configuration Summary:${NC}"
+    echo ""
+    print_box_start
+    print_box_item "  ${GREEN}✓${NC} Process Manager: ${PM_TYPE}"
+    print_box_item "  ${GREEN}✓${NC} Max Children: ${PM_MAX_CHILDREN}"
+    print_box_item "  ${GREEN}✓${NC} Start Servers: ${PM_START_SERVERS}"
+    print_box_item "  ${GREEN}✓${NC} Min Spare: ${PM_MIN_SPARE_SERVERS}"
+    print_box_item "  ${GREEN}✓${NC} Max Spare: ${PM_MAX_SPARE_SERVERS}"
+    print_box_item "  ${GREEN}✓${NC} Max Requests: ${PM_MAX_REQUESTS}"
+    print_box_item ""
+    print_box_item "  Status Page: /php-fpm-status"
+    print_box_item "  Slow Log: /var/log/php${PHP_VERSION}-fpm-slow.log"
+    print_box_item "  Config: /etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+    print_box_end
+    echo ""
+    
+    # Install PHP-FPM management CLI
+    install_php_fpm_cli
+}
+
+install_php_fpm_cli() {
+    log_step "Installing PHP-FPM management CLI..."
+    
+    local cli_script="/usr/local/bin/php-fpm-manage"
+    
+    cat > "$cli_script" << 'EOFCLI'
+#!/bin/bash
+
+#############################################################################
+# PHP-FPM Management CLI
+# Manage PHP-FPM workers and monitor performance
+#############################################################################
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Detect PHP version
+PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;")
+FPM_SERVICE="php${PHP_VERSION}-fpm"
+POOL_CONFIG="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+SLOW_LOG="/var/log/php${PHP_VERSION}-fpm-slow.log"
+
+show_usage() {
+    echo -e "${CYAN}PHP-FPM Management CLI${NC}"
+    echo ""
+    echo "Usage: php-fpm-manage [command]"
+    echo ""
+    echo "Commands:"
+    echo "  status       Show PHP-FPM status and pool information"
+    echo "  restart      Restart PHP-FPM service"
+    echo "  reload       Reload PHP-FPM configuration"
+    echo "  config       Show current pool configuration"
+    echo "  workers      Show active workers"
+    echo "  slow         Show slow requests log"
+    echo "  stats        Show detailed statistics"
+    echo "  test         Test PHP-FPM configuration"
+    echo "  help         Show this help message"
+    echo ""
+}
+
+show_status() {
+    echo -e "${CYAN}=== PHP-FPM Status ===${NC}"
+    echo ""
+    
+    if systemctl is-active --quiet "$FPM_SERVICE"; then
+        echo -e "Service: ${GREEN}Running${NC}"
+    else
+        echo -e "Service: ${RED}Stopped${NC}"
+        return 1
+    fi
+    
+    echo "PHP Version: $PHP_VERSION"
+    echo "Service: $FPM_SERVICE"
+    echo ""
+    
+    systemctl status "$FPM_SERVICE" --no-pager -l | head -15
+}
+
+show_config() {
+    echo -e "${CYAN}=== PHP-FPM Pool Configuration ===${NC}"
+    echo ""
+    
+    if [ ! -f "$POOL_CONFIG" ]; then
+        echo -e "${RED}Config file not found: $POOL_CONFIG${NC}"
+        return 1
+    fi
+    
+    echo "Config File: $POOL_CONFIG"
+    echo ""
+    
+    echo -e "${YELLOW}Process Manager Settings:${NC}"
+    grep -E "^pm = |^pm\.max_children|^pm\.start_servers|^pm\.min_spare|^pm\.max_spare|^pm\.max_requests" "$POOL_CONFIG" | while read line; do
+        echo "  $line"
+    done
+    
+    echo ""
+    echo -e "${YELLOW}Resource Limits:${NC}"
+    grep -E "^pm\.max_requests|^request_terminate_timeout|^request_slowlog_timeout" "$POOL_CONFIG" | while read line; do
+        echo "  $line"
+    done
+}
+
+show_workers() {
+    echo -e "${CYAN}=== Active PHP-FPM Workers ===${NC}"
+    echo ""
+    
+    local worker_count=$(ps aux | grep "php-fpm: pool www" | grep -v grep | wc -l)
+    echo "Active Workers: $worker_count"
+    echo ""
+    
+    ps aux | grep "php-fpm: pool www" | grep -v grep | head -20
+}
+
+show_slow_log() {
+    echo -e "${CYAN}=== Slow Request Log ===${NC}"
+    echo ""
+    
+    if [ ! -f "$SLOW_LOG" ]; then
+        echo -e "${YELLOW}No slow log file found: $SLOW_LOG${NC}"
+        echo "Slow logging may not be enabled."
+        return 0
+    fi
+    
+    echo "Log File: $SLOW_LOG"
+    echo ""
+    
+    if [ ! -s "$SLOW_LOG" ]; then
+        echo -e "${GREEN}No slow requests recorded${NC}"
+        return 0
+    fi
+    
+    echo "Recent slow requests:"
+    tail -50 "$SLOW_LOG"
+}
+
+show_stats() {
+    echo -e "${CYAN}=== PHP-FPM Statistics ===${NC}"
+    echo ""
+    
+    # Process information
+    local total_workers=$(ps aux | grep "php-fpm: pool www" | grep -v grep | wc -l)
+    local idle_workers=$(ps aux | grep "php-fpm: pool www" | grep "idle" | wc -l)
+    local active_workers=$((total_workers - idle_workers))
+    
+    echo -e "${YELLOW}Worker Status:${NC}"
+    echo "  Total Workers: $total_workers"
+    echo "  Active: $active_workers"
+    echo "  Idle: $idle_workers"
+    echo ""
+    
+    # Memory usage
+    local total_memory=$(ps aux | grep "php-fpm: pool www" | grep -v grep | awk '{sum+=$6} END {print sum/1024}')
+    local avg_memory=$(ps aux | grep "php-fpm: pool www" | grep -v grep | awk '{sum+=$6; count++} END {print sum/count/1024}')
+    
+    echo -e "${YELLOW}Memory Usage:${NC}"
+    printf "  Total: %.2f MB\n" "$total_memory"
+    printf "  Average per worker: %.2f MB\n" "$avg_memory"
+    echo ""
+    
+    # System resources
+    echo -e "${YELLOW}System Resources:${NC}"
+    echo "  CPU Cores: $(nproc)"
+    free -h | grep "Mem:" | awk '{print "  Total RAM: "$2"\n  Available: "$7}'
+    echo ""
+    
+    # Uptime
+    echo -e "${YELLOW}Service Uptime:${NC}"
+    systemctl show "$FPM_SERVICE" --property=ActiveEnterTimestamp | cut -d= -f2
+}
+
+restart_fpm() {
+    echo -e "${CYAN}=== Restarting PHP-FPM ===${NC}"
+    echo ""
+    
+    echo "Restarting $FPM_SERVICE..."
+    systemctl restart "$FPM_SERVICE"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ PHP-FPM restarted successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to restart PHP-FPM${NC}"
+        return 1
+    fi
+}
+
+reload_fpm() {
+    echo -e "${CYAN}=== Reloading PHP-FPM ===${NC}"
+    echo ""
+    
+    echo "Reloading $FPM_SERVICE configuration..."
+    systemctl reload "$FPM_SERVICE"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ PHP-FPM configuration reloaded${NC}"
+    else
+        echo -e "${RED}✗ Failed to reload PHP-FPM${NC}"
+        return 1
+    fi
+}
+
+test_config() {
+    echo -e "${CYAN}=== Testing PHP-FPM Configuration ===${NC}"
+    echo ""
+    
+    php-fpm${PHP_VERSION} -t
+    
+    if [ $? -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}✓ Configuration is valid${NC}"
+    else
+        echo ""
+        echo -e "${RED}✗ Configuration has errors${NC}"
+        return 1
+    fi
+}
+
+# Main command handler
+case "${1:-help}" in
+    status) show_status ;;
+    restart) restart_fpm ;;
+    reload) reload_fpm ;;
+    config) show_config ;;
+    workers) show_workers ;;
+    slow) show_slow_log ;;
+    stats) show_stats ;;
+    test) test_config ;;
+    help|--help|-h) show_usage ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        echo ""
+        show_usage
+        exit 1
+        ;;
+esac
+EOFCLI
+    
+    chmod +x "$cli_script"
+    log_success "PHP-FPM management CLI installed: php-fpm-manage"
+    log_info "Usage: php-fpm-manage [status|restart|reload|config|workers|slow|stats|test]"
 }
 
 #############################################################################

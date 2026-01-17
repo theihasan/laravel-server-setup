@@ -82,6 +82,14 @@ APP_DEBUG="false"
 APP_URL=""
 DOMAIN_NAME=""
 
+# PHP-FPM Configuration
+PM_TYPE="dynamic"
+PM_MAX_CHILDREN=""
+PM_START_SERVERS=""
+PM_MIN_SPARE_SERVERS=""
+PM_MAX_SPARE_SERVERS=""
+PM_MAX_REQUESTS=""
+
 # Queue Configuration
 QUEUE_DRIVER="database"
 QUEUE_WORKERS=2

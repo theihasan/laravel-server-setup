@@ -1,0 +1,231 @@
+#!/bin/bash
+
+#############################################################################
+# PHP-FPM Management CLI
+# Manage PHP-FPM workers and monitor performance
+#############################################################################
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Detect PHP version
+PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;")
+FPM_SERVICE="php${PHP_VERSION}-fpm"
+POOL_CONFIG="/etc/php/${PHP_VERSION}/fpm/pool.d/www.conf"
+SLOW_LOG="/var/log/php${PHP_VERSION}-fpm-slow.log"
+
+show_usage() {
+    echo -e "${CYAN}PHP-FPM Management CLI${NC}"
+    echo ""
+    echo "Usage: php-fpm-manage [command]"
+    echo ""
+    echo "Commands:"
+    echo "  status       Show PHP-FPM status and pool information"
+    echo "  restart      Restart PHP-FPM service"
+    echo "  reload       Reload PHP-FPM configuration"
+    echo "  config       Show current pool configuration"
+    echo "  workers      Show active workers"
+    echo "  slow         Show slow requests log"
+    echo "  stats        Show detailed statistics"
+    echo "  test         Test PHP-FPM configuration"
+    echo "  help         Show this help message"
+    echo ""
+}
+
+show_status() {
+    echo -e "${CYAN}=== PHP-FPM Status ===${NC}"
+    echo ""
+    
+    if systemctl is-active --quiet "$FPM_SERVICE"; then
+        echo -e "Service: ${GREEN}Running${NC}"
+    else
+        echo -e "Service: ${RED}Stopped${NC}"
+        return 1
+    fi
+    
+    echo "PHP Version: $PHP_VERSION"
+    echo "Service: $FPM_SERVICE"
+    echo ""
+    
+    systemctl status "$FPM_SERVICE" --no-pager -l | head -15
+}
+
+show_config() {
+    echo -e "${CYAN}=== PHP-FPM Pool Configuration ===${NC}"
+    echo ""
+    
+    if [ ! -f "$POOL_CONFIG" ]; then
+        echo -e "${RED}Config file not found: $POOL_CONFIG${NC}"
+        return 1
+    fi
+    
+    echo "Config File: $POOL_CONFIG"
+    echo ""
+    
+    echo -e "${YELLOW}Process Manager Settings:${NC}"
+    grep -E "^pm = |^pm\.max_children|^pm\.start_servers|^pm\.min_spare|^pm\.max_spare|^pm\.max_requests" "$POOL_CONFIG" | while read line; do
+        echo "  $line"
+    done
+    
+    echo ""
+    echo -e "${YELLOW}Resource Limits:${NC}"
+    grep -E "^pm\.max_requests|^request_terminate_timeout|^request_slowlog_timeout" "$POOL_CONFIG" | while read line; do
+        echo "  $line"
+    done
+}
+
+show_workers() {
+    echo -e "${CYAN}=== Active PHP-FPM Workers ===${NC}"
+    echo ""
+    
+    local worker_count=$(ps aux | grep "php-fpm: pool www" | grep -v grep | wc -l)
+    echo "Active Workers: $worker_count"
+    echo ""
+    
+    ps aux | grep "php-fpm: pool www" | grep -v grep | head -20
+}
+
+show_slow_log() {
+    echo -e "${CYAN}=== Slow Request Log ===${NC}"
+    echo ""
+    
+    if [ ! -f "$SLOW_LOG" ]; then
+        echo -e "${YELLOW}No slow log file found: $SLOW_LOG${NC}"
+        echo "Slow logging may not be enabled."
+        return 0
+    fi
+    
+    echo "Log File: $SLOW_LOG"
+    echo ""
+    
+    if [ ! -s "$SLOW_LOG" ]; then
+        echo -e "${GREEN}No slow requests recorded${NC}"
+        return 0
+    fi
+    
+    echo "Recent slow requests:"
+    tail -50 "$SLOW_LOG"
+}
+
+show_stats() {
+    echo -e "${CYAN}=== PHP-FPM Statistics ===${NC}"
+    echo ""
+    
+    # Process information
+    local total_workers=$(ps aux | grep "php-fpm: pool www" | grep -v grep | wc -l)
+    local idle_workers=$(ps aux | grep "php-fpm: pool www" | grep "idle" | wc -l)
+    local active_workers=$((total_workers - idle_workers))
+    
+    echo -e "${YELLOW}Worker Status:${NC}"
+    echo "  Total Workers: $total_workers"
+    echo "  Active: $active_workers"
+    echo "  Idle: $idle_workers"
+    echo ""
+    
+    # Memory usage
+    local total_memory=$(ps aux | grep "php-fpm: pool www" | grep -v grep | awk '{sum+=$6} END {print sum/1024}')
+    local avg_memory=$(ps aux | grep "php-fpm: pool www" | grep -v grep | awk '{sum+=$6; count++} END {print sum/count/1024}')
+    
+    echo -e "${YELLOW}Memory Usage:${NC}"
+    printf "  Total: %.2f MB\n" "$total_memory"
+    printf "  Average per worker: %.2f MB\n" "$avg_memory"
+    echo ""
+    
+    # System resources
+    echo -e "${YELLOW}System Resources:${NC}"
+    echo "  CPU Cores: $(nproc)"
+    free -h | grep "Mem:" | awk '{print "  Total RAM: "$2"\n  Available: "$7}'
+    echo ""
+    
+    # Uptime
+    echo -e "${YELLOW}Service Uptime:${NC}"
+    systemctl show "$FPM_SERVICE" --property=ActiveEnterTimestamp | cut -d= -f2
+}
+
+restart_fpm() {
+    echo -e "${CYAN}=== Restarting PHP-FPM ===${NC}"
+    echo ""
+    
+    echo "Restarting $FPM_SERVICE..."
+    systemctl restart "$FPM_SERVICE"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ PHP-FPM restarted successfully${NC}"
+    else
+        echo -e "${RED}✗ Failed to restart PHP-FPM${NC}"
+        return 1
+    fi
+}
+
+reload_fpm() {
+    echo -e "${CYAN}=== Reloading PHP-FPM ===${NC}"
+    echo ""
+    
+    echo "Reloading $FPM_SERVICE configuration..."
+    systemctl reload "$FPM_SERVICE"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ PHP-FPM configuration reloaded${NC}"
+    else
+        echo -e "${RED}✗ Failed to reload PHP-FPM${NC}"
+        return 1
+    fi
+}
+
+test_config() {
+    echo -e "${CYAN}=== Testing PHP-FPM Configuration ===${NC}"
+    echo ""
+    
+    php-fpm${PHP_VERSION} -t
+    
+    if [ $? -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}✓ Configuration is valid${NC}"
+    else
+        echo ""
+        echo -e "${RED}✗ Configuration has errors${NC}"
+        return 1
+    fi
+}
+
+# Main command handler
+case "${1:-help}" in
+    status)
+        show_status
+        ;;
+    restart)
+        restart_fpm
+        ;;
+    reload)
+        reload_fpm
+        ;;
+    config)
+        show_config
+        ;;
+    workers)
+        show_workers
+        ;;
+    slow)
+        show_slow_log
+        ;;
+    stats)
+        show_stats
+        ;;
+    test)
+        test_config
+        ;;
+    help|--help|-h)
+        show_usage
+        ;;
+    *)
+        echo -e "${RED}Unknown command: $1${NC}"
+        echo ""
+        show_usage
+        exit 1
+        ;;
+esac
