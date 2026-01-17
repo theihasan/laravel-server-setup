@@ -890,6 +890,9 @@ configure_laravel_application() {
     # Configure web server
     configure_webserver_for_laravel
     
+    # Configure Git for deployment
+    configure_git_for_deployment
+    
     log_success "Laravel application configured"
 }
 
@@ -1019,6 +1022,424 @@ configure_webserver_for_laravel() {
             configure_frankenphp_laravel "$REPO_NAME" "$LARAVEL_PATH" "$DOMAIN_NAME"
             ;;
     esac
+}
+
+#############################################################################
+# GIT CONFIGURATION FOR DEPLOYMENT
+#############################################################################
+
+configure_git_for_deployment() {
+    # Check if this is a Git repository
+    if [ ! -d "$LARAVEL_PATH/.git" ]; then
+        log_info "Not a Git repository, skipping Git configuration"
+        return 0
+    fi
+    
+    if ! confirm "Configure Git for easy deployment and updates?"; then
+        log_info "Skipping Git configuration"
+        return 0
+    fi
+    
+    print_section "🔧 Git Deployment Configuration"
+    
+    cd "$LARAVEL_PATH" || return 1
+    
+    log_step "Configuring Git for deployment..."
+    
+    # Add safe directory (prevents "dubious ownership" errors)
+    git config --global --add safe.directory "$LARAVEL_PATH"
+    
+    # Configure Git to allow www-data user to run git commands
+    chown -R www-data:www-data "$LARAVEL_PATH/.git"
+    
+    # Set Git to preserve file permissions
+    sudo -u www-data git config core.fileMode false
+    
+    # Configure credential helper for HTTPS repositories
+    sudo -u www-data git config credential.helper store
+    
+    # Get current remote info
+    local remote_url=$(sudo -u www-data git config --get remote.origin.url 2>/dev/null || echo "")
+    local current_branch=$(sudo -u www-data git branch --show-current 2>/dev/null || echo "main")
+    
+    if [ -n "$remote_url" ]; then
+        log_info "Current remote: $remote_url"
+        log_info "Current branch: $current_branch"
+    fi
+    
+    # Configure Git user (for commits if needed)
+    echo ""
+    if confirm "Configure Git user for commits?"; then
+        get_input "Git user name" "Deployment User" git_user_name
+        get_input "Git user email" "deploy@${DOMAIN_NAME}" git_user_email
+        
+        sudo -u www-data git config user.name "$git_user_name"
+        sudo -u www-data git config user.email "$git_user_email"
+        
+        log_success "Git user configured"
+    fi
+    
+    # Setup deployment workflow
+    setup_git_deployment_workflow
+    
+    # Create deployment helper script
+    create_git_deploy_script
+    
+    log_success "Git configured for deployment"
+}
+
+setup_git_deployment_workflow() {
+    log_step "Setting up deployment workflow..."
+    
+    echo ""
+    echo -e "${BOLD}Git Deployment Strategy:${NC}"
+    echo ""
+    print_box_start
+    print_box_item "  ${GREEN}1)${NC} Standard Pull (git pull)"
+    print_box_item "     → Pull and merge changes"
+    print_box_item ""
+    print_box_item "  ${GREEN}2)${NC} Force Pull (git reset --hard + pull)"
+    print_box_item "     → Discard local changes, force update"
+    print_box_item ""
+    print_box_item "  ${GREEN}3)${NC} Custom (manual configuration)"
+    print_box_item "     → You manage Git workflow"
+    print_box_end
+    echo ""
+    
+    get_input "Select deployment strategy [1-3]" "1" deploy_strategy
+    
+    case $deploy_strategy in
+        1)
+            GIT_DEPLOY_MODE="pull"
+            log_info "Using standard pull strategy"
+            ;;
+        2)
+            GIT_DEPLOY_MODE="force"
+            log_info "Using force pull strategy"
+            ;;
+        3)
+            GIT_DEPLOY_MODE="manual"
+            log_info "Manual Git workflow"
+            ;;
+        *)
+            GIT_DEPLOY_MODE="pull"
+            log_info "Defaulting to standard pull strategy"
+            ;;
+    esac
+    
+    # Configure branch tracking
+    local current_branch=$(sudo -u www-data git branch --show-current 2>/dev/null || echo "main")
+    sudo -u www-data git branch --set-upstream-to=origin/$current_branch $current_branch 2>/dev/null || true
+    
+    log_success "Deployment workflow configured"
+}
+
+create_git_deploy_script() {
+    log_step "Creating deployment helper script..."
+    
+    local deploy_script="/usr/local/bin/laravel-deploy"
+    
+    cat > "$deploy_script" << 'EOFDEPLOY'
+#!/bin/bash
+
+#############################################################################
+# Laravel Deployment Script
+# Easy Git-based deployment with automatic Laravel updates
+#############################################################################
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Detect Laravel path from command line or current directory
+LARAVEL_PATH="${1:-$(pwd)}"
+
+if [ ! -f "$LARAVEL_PATH/artisan" ]; then
+    echo -e "${RED}Error: Not a Laravel project${NC}"
+    echo "Usage: laravel-deploy [/path/to/laravel]"
+    exit 1
+fi
+
+cd "$LARAVEL_PATH" || exit 1
+
+# Detect PHP version
+PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;")
+
+show_usage() {
+    echo -e "${CYAN}Laravel Deployment Helper${NC}"
+    echo ""
+    echo "Usage: laravel-deploy [command] [path]"
+    echo ""
+    echo "Commands:"
+    echo "  pull         Pull latest changes and update"
+    echo "  force        Force pull (discard local changes)"
+    echo "  status       Show Git status"
+    echo "  branch       Show/switch branches"
+    echo "  log          Show recent commits"
+    echo "  rollback     Rollback to previous commit"
+    echo "  help         Show this help"
+    echo ""
+    echo "Path: /path/to/laravel (defaults to current directory)"
+    echo ""
+    echo "Examples:"
+    echo "  laravel-deploy pull"
+    echo "  laravel-deploy pull /var/www/html/myapp"
+    echo "  laravel-deploy branch"
+    echo "  laravel-deploy rollback"
+    echo ""
+}
+
+enable_maintenance() {
+    echo -e "${YELLOW}[→]${NC} Enabling maintenance mode..."
+    sudo -u www-data php artisan down --render="errors::503" 2>/dev/null || echo "Already in maintenance mode"
+}
+
+disable_maintenance() {
+    echo -e "${YELLOW}[→]${NC} Disabling maintenance mode..."
+    sudo -u www-data php artisan up 2>/dev/null
+}
+
+pull_changes() {
+    echo -e "${CYAN}=== Deploying Latest Changes ===${NC}"
+    echo ""
+    
+    # Check for uncommitted changes
+    if ! sudo -u www-data git diff-index --quiet HEAD -- 2>/dev/null; then
+        echo -e "${YELLOW}Warning: You have uncommitted changes${NC}"
+        sudo -u www-data git status --short
+        echo ""
+        read -p "Continue? This will stash your changes. [y/N]: " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Deployment cancelled"
+            exit 1
+        fi
+        sudo -u www-data git stash
+    fi
+    
+    # Enable maintenance mode
+    enable_maintenance
+    
+    # Pull changes
+    echo -e "${YELLOW}[→]${NC} Pulling latest changes..."
+    if sudo -u www-data git pull origin $(git branch --show-current); then
+        echo -e "${GREEN}✓${NC} Changes pulled successfully"
+    else
+        echo -e "${RED}✗${NC} Failed to pull changes"
+        disable_maintenance
+        exit 1
+    fi
+    
+    # Update dependencies
+    update_application
+    
+    # Disable maintenance mode
+    disable_maintenance
+    
+    echo ""
+    echo -e "${GREEN}✓ Deployment completed successfully${NC}"
+}
+
+force_pull() {
+    echo -e "${CYAN}=== Force Deploying (Discard Local Changes) ===${NC}"
+    echo ""
+    echo -e "${RED}WARNING: This will discard all local changes!${NC}"
+    read -p "Are you sure? [y/N]: " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Cancelled"
+        exit 1
+    fi
+    
+    # Enable maintenance mode
+    enable_maintenance
+    
+    # Get current branch
+    local branch=$(sudo -u www-data git branch --show-current)
+    
+    # Fetch and reset
+    echo -e "${YELLOW}[→]${NC} Fetching latest changes..."
+    sudo -u www-data git fetch origin
+    
+    echo -e "${YELLOW}[→]${NC} Resetting to origin/$branch..."
+    sudo -u www-data git reset --hard origin/$branch
+    
+    echo -e "${YELLOW}[→]${NC} Cleaning untracked files..."
+    sudo -u www-data git clean -fd
+    
+    # Update dependencies
+    update_application
+    
+    # Disable maintenance mode
+    disable_maintenance
+    
+    echo ""
+    echo -e "${GREEN}✓ Force deployment completed${NC}"
+}
+
+update_application() {
+    echo -e "${YELLOW}[→]${NC} Updating Composer dependencies..."
+    sudo -u www-data composer install --no-dev --optimize-autoloader --no-interaction
+    
+    echo -e "${YELLOW}[→]${NC} Running migrations..."
+    sudo -u www-data php artisan migrate --force
+    
+    echo -e "${YELLOW}[→]${NC} Clearing caches..."
+    sudo -u www-data php artisan cache:clear
+    sudo -u www-data php artisan config:clear
+    sudo -u www-data php artisan view:clear
+    sudo -u www-data php artisan route:clear
+    
+    echo -e "${YELLOW}[→]${NC} Optimizing for production..."
+    sudo -u www-data php artisan config:cache
+    sudo -u www-data php artisan route:cache
+    sudo -u www-data php artisan view:cache
+    
+    # Build frontend assets if package.json exists
+    if [ -f "package.json" ] && command -v npm &> /dev/null; then
+        echo -e "${YELLOW}[→]${NC} Building frontend assets..."
+        sudo -u www-data npm ci --production
+        sudo -u www-data npm run build 2>/dev/null || sudo -u www-data npm run production 2>/dev/null || true
+    fi
+    
+    # Restart PHP-FPM
+    echo -e "${YELLOW}[→]${NC} Restarting PHP-FPM..."
+    systemctl reload php${PHP_VERSION}-fpm
+    
+    # Restart queue workers if supervisor is installed
+    if command -v supervisorctl &> /dev/null; then
+        echo -e "${YELLOW}[→]${NC} Restarting queue workers..."
+        supervisorctl restart all 2>/dev/null || true
+    fi
+}
+
+show_status() {
+    echo -e "${CYAN}=== Git Status ===${NC}"
+    echo ""
+    sudo -u www-data git status
+    echo ""
+    echo -e "${CYAN}=== Current Branch ===${NC}"
+    echo ""
+    sudo -u www-data git branch -v
+}
+
+manage_branches() {
+    echo -e "${CYAN}=== Git Branches ===${NC}"
+    echo ""
+    sudo -u www-data git branch -a
+    echo ""
+    read -p "Switch to branch (or press Enter to skip): " branch_name
+    
+    if [ -n "$branch_name" ]; then
+        echo ""
+        echo -e "${YELLOW}[→]${NC} Switching to branch: $branch_name..."
+        
+        if sudo -u www-data git checkout "$branch_name"; then
+            echo -e "${GREEN}✓${NC} Switched to $branch_name"
+            echo ""
+            read -p "Pull latest changes? [Y/n]: " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                pull_changes
+            fi
+        else
+            echo -e "${RED}✗${NC} Failed to switch branch"
+        fi
+    fi
+}
+
+show_log() {
+    echo -e "${CYAN}=== Recent Commits ===${NC}"
+    echo ""
+    sudo -u www-data git log --oneline --decorate --graph -20
+}
+
+rollback_commit() {
+    echo -e "${CYAN}=== Rollback Deployment ===${NC}"
+    echo ""
+    
+    echo "Recent commits:"
+    sudo -u www-data git log --oneline -10
+    echo ""
+    
+    read -p "Enter commit hash to rollback to: " commit_hash
+    
+    if [ -z "$commit_hash" ]; then
+        echo "Cancelled"
+        exit 1
+    fi
+    
+    echo ""
+    echo -e "${RED}WARNING: This will reset to commit: $commit_hash${NC}"
+    read -p "Are you sure? [y/N]: " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Cancelled"
+        exit 1
+    fi
+    
+    # Enable maintenance mode
+    enable_maintenance
+    
+    # Reset to commit
+    echo -e "${YELLOW}[→]${NC} Rolling back to $commit_hash..."
+    if sudo -u www-data git reset --hard "$commit_hash"; then
+        echo -e "${GREEN}✓${NC} Rolled back successfully"
+        
+        # Update application
+        update_application
+    else
+        echo -e "${RED}✗${NC} Rollback failed"
+    fi
+    
+    # Disable maintenance mode
+    disable_maintenance
+}
+
+# Command handler
+case "${1:-pull}" in
+    pull)
+        pull_changes
+        ;;
+    force)
+        force_pull
+        ;;
+    status)
+        show_status
+        ;;
+    branch)
+        manage_branches
+        ;;
+    log)
+        show_log
+        ;;
+    rollback)
+        rollback_commit
+        ;;
+    help|--help|-h)
+        show_usage
+        ;;
+    *)
+        if [ -d "$1" ]; then
+            LARAVEL_PATH="$1"
+            pull_changes
+        else
+            echo -e "${RED}Unknown command: $1${NC}"
+            echo ""
+            show_usage
+            exit 1
+        fi
+        ;;
+esac
+EOFDEPLOY
+    
+    chmod +x "$deploy_script"
+    log_success "Deployment script installed: laravel-deploy"
+    log_info "Usage: laravel-deploy [pull|force|status|branch|log|rollback]"
 }
 
 #############################################################################
