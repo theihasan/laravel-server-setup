@@ -1,0 +1,17 @@
+# Supervisor Configuration for Laravel Horizon
+# This template is for projects using Laravel Horizon for queue management
+
+[program:{{APP_NAME}}-horizon]
+process_name=%(program_name)s
+command=php {{LARAVEL_PATH}}/artisan horizon
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user={{WEB_USER}}
+redirect_stderr=true
+stdout_logfile={{LARAVEL_PATH}}/storage/logs/horizon.log
+stopwaitsecs=3600
+
+# Environment variables
+environment=PATH="/usr/local/bin:/usr/bin:/bin",HOME="/home/{{WEB_USER}}"

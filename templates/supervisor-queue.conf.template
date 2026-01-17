@@ -1,0 +1,12 @@
+[program:{{APP_NAME}}-worker-{{QUEUE_NAME}}]
+process_name=%(program_name)s_%(process_num)02d
+command=php {{LARAVEL_PATH}}/artisan queue:work {{QUEUE_DRIVER}} --queue={{QUEUE_NAME}} --sleep=3 --tries=3 --max-time=3600 --timeout=60
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user={{WEB_USER}}
+numprocs={{NUM_PROCS}}
+redirect_stderr=true
+stdout_logfile={{LARAVEL_PATH}}/storage/logs/queue_{{QUEUE_NAME}}.log
+stopwaitsecs=3600

@@ -1,0 +1,74 @@
+# Caddyfile for Laravel Application
+# Caddy automatically handles HTTPS with Let's Encrypt
+
+{{DOMAIN_NAME}} {
+    # Document root
+    root * {{LARAVEL_PATH}}/public
+    
+    # Enable PHP-FPM
+    php_fastcgi unix//var/run/php/php{{PHP_VERSION}}-fpm.sock {
+        env HTTP_PROXY ""
+        try_files {path} /index.php?{query}
+    }
+    
+    # Enable file server
+    file_server
+    
+    # Logging
+    log {
+        output file /var/log/caddy/{{APP_NAME}}-access.log
+        format json
+    }
+    
+    # Security headers
+    header {
+        # Enable HTTP Strict Transport Security (HSTS)
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        
+        # Clickjacking protection
+        X-Frame-Options "SAMEORIGIN"
+        
+        # MIME type sniffing protection
+        X-Content-Type-Options "nosniff"
+        
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        
+        # Referrer policy
+        Referrer-Policy "no-referrer-when-downgrade"
+        
+        # Remove server header
+        -Server
+    }
+    
+    # Deny access to hidden files
+    @hidden {
+        path */.*
+    }
+    respond @hidden 404
+    
+    # Deny access to sensitive files
+    @sensitive {
+        path *.env *.git* composer.json composer.lock package.json package-lock.json yarn.lock webpack.mix.js
+    }
+    respond @sensitive 404
+    
+    # Cache static assets
+    @static {
+        path *.jpg *.jpeg *.png *.gif *.ico *.css *.js *.svg *.woff *.woff2 *.ttf *.eot
+    }
+    header @static Cache-Control "max-age=31536000, public, immutable"
+    
+    # Compression
+    encode gzip zstd
+    
+    # Request body size limit (100MB)
+    request_body {
+        max_size 100MB
+    }
+}
+
+# Optional: www to non-www redirect
+www.{{DOMAIN_NAME}} {
+    redir https://{{DOMAIN_NAME}}{uri} permanent
+}
