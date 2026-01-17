@@ -241,6 +241,13 @@ clone_laravel_from_git() {
     git clone "$REPO_URL" "$REPO_NAME" || error_exit "Failed to clone repository"
     
     log_success "Repository cloned to $LARAVEL_PATH"
+    
+    # Set ownership immediately after cloning to avoid permission issues
+    chown -R www-data:www-data "$LARAVEL_PATH"
+    
+    # Fix git safe directory warning
+    cd "$LARAVEL_PATH"
+    git config --global --add safe.directory "$LARAVEL_PATH"
 }
 
 create_new_laravel_project() {
@@ -259,6 +266,9 @@ create_new_laravel_project() {
     composer create-project laravel/laravel "$REPO_NAME" || error_exit "Failed to create Laravel project"
     
     log_success "Laravel project created at $LARAVEL_PATH"
+    
+    # Set ownership immediately after creating project
+    chown -R www-data:www-data "$LARAVEL_PATH"
 }
 
 configure_existing_laravel_project() {
@@ -288,6 +298,9 @@ configure_laravel_application() {
     log_step "Configuring Laravel application..."
     
     cd "$LARAVEL_PATH" || error_exit "Failed to navigate to project directory"
+    
+    # Ensure proper ownership before any operations
+    chown -R www-data:www-data "$LARAVEL_PATH"
     
     # Install dependencies if composer.json exists
     if [ -f "composer.json" ]; then
