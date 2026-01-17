@@ -175,17 +175,68 @@ configure_composer() {
 #############################################################################
 
 install_nodejs_npm() {
-    log_step "Installing Node.js and NPM..."
+    if ! confirm "Install Node.js and NPM for frontend assets?"; then
+        log_info "Skipping Node.js installation"
+        return 0
+    fi
+    
+    print_section "📦 Node.js & NPM Configuration"
+    
+    select_nodejs_version
+    install_nodejs
+    configure_npm
+}
+
+select_nodejs_version() {
+    echo -e "${BOLD}Select Node.js version:${NC}"
+    echo ""
+    
+    print_box_start
+    print_box_item "  ${GREEN}1)${NC} Node.js 18.x LTS (Hydrogen)"
+    print_box_item "     → Stable, well-tested, good for production"
+    print_box_item ""
+    print_box_item "  ${GREEN}2)${NC} Node.js 20.x LTS (Iron) ${GREEN}(Recommended)${NC}"
+    print_box_item "     → Current LTS, best for Laravel 10/11 with Vite"
+    print_box_item ""
+    print_box_item "  ${GREEN}3)${NC} Node.js 22.x (Latest)"
+    print_box_item "     → Cutting edge, latest features"
+    print_box_end
+    echo ""
+    
+    get_input "Select Node.js version [1-3]" "2" node_choice
+    
+    case $node_choice in
+        1) 
+            NODE_VERSION="18"
+            log_info "Selected: Node.js 18.x LTS"
+            ;;
+        2) 
+            NODE_VERSION="20"
+            log_info "Selected: Node.js 20.x LTS (Recommended)"
+            ;;
+        3) 
+            NODE_VERSION="22"
+            log_info "Selected: Node.js 22.x (Latest)"
+            ;;
+        *) 
+            log_warning "Invalid selection, defaulting to Node.js 20.x LTS"
+            NODE_VERSION="20"
+            ;;
+    esac
+}
+
+install_nodejs() {
+    log_step "Installing Node.js ${NODE_VERSION}.x and NPM..."
     
     case $OS in
         ubuntu|debian)
-            # Install Node.js 20.x LTS (recommended for Laravel)
-            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            # Install Node.js from NodeSource repository
+            curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
             apt-get install -y nodejs || error_exit "Failed to install Node.js"
             ;;
         centos|rhel|fedora)
-            # Install Node.js 20.x LTS
-            curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            # Install Node.js from NodeSource repository
+            curl -fsSL "https://rpm.nodesource.com/setup_${NODE_VERSION}.x" | bash -
             yum install -y nodejs || error_exit "Failed to install Node.js"
             ;;
     esac
@@ -200,12 +251,22 @@ install_nodejs_npm() {
         log_warning "Node.js/NPM installation may have failed"
         return 1
     fi
+}
+
+configure_npm() {
+    log_step "Configuring NPM..."
     
     # Configure npm for www-data user
     mkdir -p /var/www/.npm
+    mkdir -p /var/www/.npm-global
     chown -R www-data:www-data /var/www/.npm
+    chown -R www-data:www-data /var/www/.npm-global
     
-    log_info "Node.js and NPM ready for Laravel asset compilation"
+    # Set npm global directory for www-data
+    sudo -u www-data npm config set prefix '/var/www/.npm-global'
+    
+    log_success "NPM configured for www-data user"
+    log_info "Node.js and NPM ready for Laravel Vite asset compilation"
 }
 
 #############################################################################
@@ -372,6 +433,9 @@ configure_laravel_application() {
     # Create storage link
     sudo -u www-data php artisan storage:link 2>/dev/null || log_info "Storage link already exists"
     
+    # Install NPM dependencies and build assets (if Node.js is installed)
+    setup_frontend_assets
+    
     # Configure web server
     configure_webserver_for_laravel
     
@@ -507,48 +571,79 @@ configure_webserver_for_laravel() {
 }
 
 #############################################################################
-# NPM AND NODE.JS (OPTIONAL)
+# FRONTEND ASSETS SETUP
 #############################################################################
 
-install_nodejs_npm() {
+setup_frontend_assets() {
+    # Check if Node.js is installed
+    if ! command -v node &> /dev/null; then
+        log_info "Node.js not installed, skipping frontend asset compilation"
+        return 0
+    fi
+    
+    # Check if package.json exists
     if [ ! -f "$LARAVEL_PATH/package.json" ]; then
-        log_info "No package.json found, skipping Node.js"
+        log_info "No package.json found, skipping frontend asset setup"
         return 0
     fi
     
-    if ! confirm "Install Node.js and build frontend assets?"; then
-        log_info "Skipping Node.js installation"
-        return 0
-    fi
-    
-    log_step "Installing Node.js..."
-    
-    local node_version="20"
-    
-    cd /tmp
-    curl -sL "https://deb.nodesource.com/setup_${node_version}.x" -o nodesource_setup.sh
-    bash nodesource_setup.sh
-    
-    case $OS in
-        ubuntu|debian)
-            apt-get install -y nodejs || error_exit "Failed to install Node.js"
-            ;;
-        centos|rhel|fedora)
-            yum install -y nodejs || error_exit "Failed to install Node.js"
-            ;;
-    esac
-    
-    log_success "Node.js $(node --version) installed"
-    
-    # Install dependencies and build
     cd "$LARAVEL_PATH"
     
-    if confirm "Install NPM dependencies and build assets?"; then
-        log_step "Installing NPM dependencies..."
-        sudo -u www-data npm install || log_warning "NPM install had issues"
-        
-        if confirm "Build production assets?"; then
-            sudo -u www-data npm run build || log_warning "Build had issues"
-        fi
+    if ! confirm "Install NPM dependencies and build frontend assets?"; then
+        log_info "Skipping frontend asset setup"
+        return 0
     fi
+    
+    log_step "Installing NPM dependencies..."
+    
+    # Install dependencies as www-data user
+    sudo -u www-data npm install || log_warning "NPM install had issues (you can run manually later)"
+    
+    # Detect if using Vite or Mix
+    local build_tool="unknown"
+    if grep -q '"vite"' package.json; then
+        build_tool="vite"
+        log_info "Detected Vite build tool"
+    elif grep -q '"laravel-mix"' package.json || grep -q '"mix"' package.json; then
+        build_tool="mix"
+        log_info "Detected Laravel Mix build tool"
+    fi
+    
+    # Ask if they want to build now
+    echo ""
+    echo -e "${BOLD}Build Options:${NC}"
+    echo ""
+    print_box_start
+    print_box_item "  ${GREEN}1)${NC} Build for production (npm run build)"
+    print_box_item "     → Optimized, minified assets"
+    print_box_item ""
+    print_box_item "  ${GREEN}2)${NC} Skip build (run manually later)"
+    print_box_item "     → You can build when ready"
+    print_box_end
+    echo ""
+    
+    get_input "Select option [1-2]" "1" build_choice
+    
+    case $build_choice in
+        1)
+            log_step "Building frontend assets for production..."
+            if [ "$build_tool" = "vite" ]; then
+                sudo -u www-data npm run build || log_warning "Vite build had issues"
+            else
+                sudo -u www-data npm run production 2>/dev/null || sudo -u www-data npm run build || log_warning "Asset build had issues"
+            fi
+            log_success "Frontend assets built successfully"
+            ;;
+        2)
+            log_info "Skipping asset build"
+            echo ""
+            log_info "To build assets later, run:"
+            if [ "$build_tool" = "vite" ]; then
+                echo "  cd $LARAVEL_PATH && npm run build"
+            else
+                echo "  cd $LARAVEL_PATH && npm run production"
+            fi
+            ;;
+    esac
 }
+
